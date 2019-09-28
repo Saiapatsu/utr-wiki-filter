@@ -1,0 +1,145 @@
+<head>
+	<meta charset="utf-8">
+</head><body>
+	<h1>UT Reborn Wiki Spoiler Filter</h1>
+	
+	<h2>Input</h2>
+	<div>
+		<form>
+			<label><input type="file" id="inXML" class="fileInput">dat1.xml</label><br>
+			<label><input type="file" id="inItems" class="fileInput">Newline-delimited list of droppable items</label>
+		</form>
+	</div>
+	
+	<h2>Output</h2>
+	<div id="output"></div>
+	<h2><a id="result">Result (right click, save as)</a></h2>
+	
+	<script type="text/javascript" charset="utf-8">
+		const output = document.querySelector("#output");
+		const result = document.querySelector("#result");
+		const inXML = document.querySelector("#inXML");
+		const inItems = document.querySelector("#inItems");
+		
+		let dataXML, dataItems;
+		
+		document.querySelectorAll(".fileInput").forEach((element) => {
+			element.addEventListener("change", inputFile);
+			if (element.files.length) {
+				inputFile({target: element}); // hack
+			}
+		});
+		
+		const parser = new DOMParser();
+		const xslt = new XSLTProcessor();
+		
+		// functions for information output
+		
+		function print(text) {
+			const span = document.createElement("div");
+			span.innerText = text;
+			output.appendChild(span);
+		}
+		
+		// clears all printed messages and revokes the xml blob url
+		function cleanup()
+		{
+			while (output.firstChild && output.removeChild(output.firstChild));
+			URL.revokeObjectURL(result.href);
+		}
+		
+		// function clearChildren(element) {
+		// 	while (element.firstChild && element.removeChild(element.firstChild));
+		// }
+		
+		// functions for file input
+		
+		function inputFile(event) {
+			const element = event.target;
+			const file = element.files[0];
+			const fr = new FileReader();
+			fr.addEventListener("load", (event) => {
+				console.log(event);
+				switch (element) {
+					case inXML:
+						dataXML = parser.parseFromString('<?xml version="1.0" encoding="UTF-8"?>' + event.target.result, "text/xml");
+						break;
+					case inItems:
+						dataItems = event.target.result.split(/\r\n/);
+						break;
+					default:
+						print("asdasdada");
+						break;
+				}
+				if (dataItems && dataXML) {
+					console.log(dataItems, dataXML);
+					beginProcessing(dataXML, dataItems);
+				}
+			});
+			fr.readAsText(file);
+		}
+		
+		// functions for processing
+		
+		const xtypes = {
+			[XPathResult.NUMBER_TYPE]: "numberValue",
+			[XPathResult.STRING_TYPE]: "stringValue",
+			[XPathResult.BOOLEAN_TYPE]: "booleanValue",
+			// [XPathResult.UNORDERED_NODE_ITERATOR_TYPE]: "iterateNext",
+			// [XPathResult.ORDERED_NODE_ITERATOR_TYPE]: "iterateNext",
+			// [XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE]: "snapshotItem",
+			// [XPathResult.ORDERED_NODE_SNAPSHOT_TYPE]: "snapshotItem",
+			[XPathResult.ANY_UNORDERED_NODE_TYPE]: "singleNodeValue",
+			[XPathResult.FIRST_ORDERED_NODE_TYPE]: "singleNodeValue"
+		}
+		
+		function query(document, path, type) {
+			type = type || XPathResult.ANY_TYPE;
+			return xtypes[type] ? 
+				document.evaluate(path, document, null, type, null)[xtypes[type]] :
+				document.evaluate(path, document, null, type, null);
+		}
+		
+		// xml: an XML Document
+		// items: array of string item names
+		function beginProcessing(xml, items) {
+			cleanup();
+			
+			// map object names to objects so they're easier to find
+			// const nameToObject = {};
+			// for (
+			// 	let xpath = query(xml, "Objects/Object", XPathResult.UNORDERED_NODE_ITERATOR_TYPE), item = xpath.iterateNext();
+			// 	item;
+			// 	item = xpath.iterateNext()
+			// ) {
+			// 	nameToObject[item.id] = item;
+			// }
+			const nameToObject = xml.documentElement.children;
+			
+			//
+			const outdoc = document.implementation.createDocument(null, "Objects", null)
+			items.forEach((name) => {
+				// const item = query(xml, "Objects/Object[translate(@id, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')=\"" + name.toLowerCase() + "\"]", XPathResult.ANY_UNORDERED_NODE_TYPE);
+				const item = nameToObject[name];
+				if (!item) {
+					print("No item named " + name + " found in source XML");
+				} else {
+					// move desired object to new document
+					outdoc.documentElement.appendChild(item);
+					// future: add <Wiki/> tag instead, let humans decide what gets to be in the wiki
+				}
+			});
+			outputXml(outdoc);
+		}
+		
+		// functions for file output
+		
+		// xml: an XML Document
+		function outputXml(xml) {
+			// console.log(xml);
+			<!-- console.log(new XMLSerializer().serializeToString(xml)); -->
+			<!-- console.log(new Blob([new XMLSerializer().serializeToString(xml)], {type : 'text/xml'})); -->
+			result.href = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(xml)], {type : 'text/xml'}));
+		}
+	</script>
+</body>
